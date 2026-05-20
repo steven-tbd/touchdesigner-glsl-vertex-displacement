@@ -1,91 +1,94 @@
-# GLSL Vertex Displacement
+# TouchDesigner GLSL Vertex Displacement
 
-A TouchDesigner project demonstrating a GLSL technique for displacing 3D geometry in real-time using a 2D texture. This example showcases an efficient shader that uses a single texture for both vertex displacement (via the alpha channel) and normal mapping (via the RGB channels).
+A TouchDesigner project using a GLSL MAT to displace 3D sphere geometry in real-time from a single input texture.
 
 ![TouchDesigner Network](touchdesigner-network.png)
 
 ## How It Works
 
-This project uses a single GLSL Material (MAT) to control both the shape and the surface lighting of a sphere.
+A single GLSL MAT controls both the shape of the sphere and its surface lighting. One texture drives both effects through its separate channels.
 
-1.  **Vertex Shader (Shape):** The vertex shader reads the **alpha channel** of an input texture. It uses this value to push each vertex of the sphere outwards along its normal, "sculpting" the geometry in real-time.
-2.  **Fragment Shader (Surface Detail):** The fragment shader reads the **RGB channels** of the same input texture and interprets them as a normal map. This allows the lighting to interact with the deformed surface as if it had complex, fine-grained detail.
+The vertex shader reads the alpha channel of the input texture and pushes each vertex outward along its normal. Brighter alpha values produce more displacement. The fragment shader reads the RGB channels of the same texture and treats them as a normal map, adding surface lighting detail that follows the displaced geometry.
+
+Swapping the input texture changes both the geometry and the lighting response in real-time.
 
 ## Usage
 
-Open the `.toe` file in TouchDesigner. You can swap out the input texture connected to the `GLSL MAT` with any image to see how it affects the final shape and lighting.
+Open the `.toe` file in TouchDesigner and connect any image to the `GLSL MAT` input. The alpha channel drives vertex displacement and the RGB channels drive the normal map.
 
 ---
 
-## GLSL Notes & Learnings
+## GLSL Reference Notes
 
-A collection of notes from my research into GLSL for this project.
+Notes compiled while building this project.
 
-### Common Use Cases for GLSL in TouchDesigner
+### Graphics Pipeline
 
-*   Creating complex 2D/3D generative visuals.
-*   Manipulating 3D geometry directly on the GPU.
-*   Building highly performant compositing and effects workflows.
-*   Generating dynamic textures for interactive installations.
+The two programmable stages in the graphics pipeline are the vertex shader and the fragment shader.
 
-### The Basic Graphics Pipeline
+| Shader Type | File Extension | Purpose |
+| --- | --- | --- |
+| **Vertex Shader** | `.vert` | Processes each vertex (position, normals, UVs). |
+| **Fragment Shader** | `.frag` | Processes each pixel (color, lighting). |
 
-The two primary programmable stages of the graphics pipeline are the Vertex Shader and the Fragment Shader.
+In TouchDesigner, the **GLSL TOP** runs only a fragment shader. The **GLSL MAT** runs both a vertex shader and a fragment shader, which is why it can modify geometry.
 
-| Shader Type     | File Extension | Purpose                                             |
-| --------------- | -------------- | --------------------------------------------------- |
-| **Vertex Shader**   | `.vert`        | Processes each individual vertex (position, etc.).    |
-| **Fragment Shader** | `.frag`        | Processes each individual pixel/fragment (color, etc.). |
+### Vertex Shader Attributes
 
-> In TouchDesigner, the **GLSL TOP** uses only a Fragment Shader. The **GLSL MAT**, used in this project, uses both a Vertex and a Fragment Shader.
+The vertex shader receives these built-in attributes from TouchDesigner geometry:
 
-### Vertex Shader: Attributes & Coordinates
+| Name | Type | Size | Description |
+| --- | --- | --- | --- |
+| `P` | `vec3` | 3 | Incoming vertex position. |
+| `N` | `vec3` | 3 | Surface normal vector for the vertex. |
+| `uv` | `vec3` | 3 | Texture coordinates (UVs). |
+| `Cd` | `vec4` | 4 | Vertex color (RGBA). |
 
-The Vertex Shader is responsible for the position of each point in 3D space. It receives several built-in attributes from TouchDesigner geometry.
-
-| Name | Type   | Size | Description                               |
-| ---- | ------ | ---- | ----------------------------------------- |
-| `P`  | `vec3` | 3    | The incoming vertex position.             |
-| `N`  | `vec3` | 3    | The surface normal vector for the vertex. |
-| `uv` | `vec3` | 3    | The texture coordinates (UVs).            |
-| `Cd` | `vec4` | 4    | The vertex color (RGBA).                  |
-
-Vertex Shaders operate in **Normalized Device Coordinates (NDC)**, where the visible space ranges from **-1.0 to 1.0** on each axis, with (0,0) at the center.
+Vertex shaders work in Normalized Device Coordinates (NDC). The visible space runs from -1.0 to 1.0 on each axis, with (0,0) at the center.
 
 ```
 Vertex Shader Coordinates	
 
 (-1.0,1.0)  ┏╍╍╍╍╍╍╍┳╍╍╍╍╍╍╍┓ (1.0,1.0)
-		    ╏                 
-		    ╏               
-		    ╏	  	    
-x		    ┣ x,y(0.0,0.0)   
-		    ╏               
-		    ╏                
-		    ╏               
+		    ╏               ╏  
+		    ╏               ╏
+		    ╏	   x,y	    ╏
+		  x ┣   (0.0,0.0)   ┫
+		    ╏               ╏
+		    ╏               ╏ 
+		    ╏               ╏
 (-1.0,-1.0) ┗╍╍╍╍╍╍╍┻╍╍╍╍╍╍╍┛ (1.0,-1.0)	
- 		    y
+ 			        y
 ```
 
-### Fragment Shader: Coordinates
+### Fragment Shader Coordinates
 
-The Fragment (or Pixel) Shader is responsible for the color of each pixel on the screen. It primarily works with **UV Coordinates**, which are normalized and range from **0.0 to 1.0**, with (0,0) at the bottom-left corner. This makes it easy to map textures to surfaces.
+The fragment shader works in UV coordinates, normalized from 0.0 to 1.0, with (0,0) at the bottom-left corner.
 
 ```
-Fragment (Pixel) Shader	Coordinates	
+Fragment (Pixel) Shader Coordinates	
 
-(0.0,0.1) ┏╍╍╍╍╍╍╍┳╍╍╍╍╍╍╍┓ (1.0,1.0)
-		  ╏                 
-		  ╏               
-		  ╏		 	  
-x 		  ┣ x,y(0.5,0.5)   
-		  ╏               
-		  ╏               
-		  ╏               
+(0.0,1.0) ┏╍╍╍╍╍╍╍┳╍╍╍╍╍╍╍┓ (1.0,1.0)
+		  ╏               ╏  
+		  ╏               ╏
+		  ╏	   x,y	  ╏
+		x ┣   (0.5,0.5)   ┫
+		  ╏               ╏
+		  ╏               ╏ 
+		  ╏               ╏
 (0.0,0.0) ┗╍╍╍╍╍╍╍┻╍╍╍╍╍╍╍┛ (1.0,0.0)	
-		  y
-```           			
+ 			      y
+```
 
-### Project Links & Demos
+### GLSL in TouchDesigner
 
-*   **Project Write-up:** [https://stevenmbenton.com/project/glsl-vertex-displacement/](https://stevenmbenton.com/project/glsl-vertex-displacement/)
+A few common uses:
+
+- Generating 2D and 3D generative visuals
+- Modifying geometry directly on the GPU
+- Building compositing and effects pipelines
+- Generating dynamic textures for interactive work
+
+## Links
+
+- [Project Write-up](https://stevenmbenton.com/glsl-vertex-displacement/)
